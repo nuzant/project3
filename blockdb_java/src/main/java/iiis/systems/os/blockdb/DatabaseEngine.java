@@ -4,6 +4,8 @@ import java.io.FileWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
@@ -20,6 +22,7 @@ public class DatabaseEngine {
     }
 
     private HashMap<String, Integer> balances = new HashMap<>();
+    private HashMap<String, Lock> locks = new HashMap<>();
     private int logLength = 0;
     private String dataDir;
     private int blockId = 1;
@@ -39,13 +42,22 @@ public class DatabaseEngine {
         }
     }
 
+    private void createLock(String userId){
+        if(!locks.containsKey(userId)){
+            Lock lock = new ReentrantLock();
+            locks.put(userId, lock);
+        }
+    }
+
     public int get(String userId) {
+        //createLock(userId);
         //logLength++;
         check_output();
         return getOrZero(userId);
     }
 
     public boolean put(String userId, int value) {
+        //createLock(userId);
         logLength++;
         balances.put(userId, value);
         output_log(1, userId, "", value);
@@ -54,6 +66,7 @@ public class DatabaseEngine {
     }
 
     public boolean deposit(String userId, int value) {
+        //createLock(userId);
         logLength++;
         int balance = getOrZero(userId);
         balances.put(userId, balance + value);
@@ -63,18 +76,23 @@ public class DatabaseEngine {
     }
 
     public boolean withdraw(String userId, int value) {
+        createLock(userId);
+        locks.get(userId).lock();
         int balance = getOrZero(userId);
         if(balance - value < 0){
             return false;
         }
         logLength++;
         balances.put(userId, balance - value);
+        locks.get(userId).unlock();
         output_log(3, userId, "", value);
         check_output();
         return true;
     }
 
     public boolean transfer(String fromId, String toId, int value) {
+        createLock(fromId);
+        locks.get(fromId).lock();
         int fromBalance = getOrZero(fromId);
         int toBalance = getOrZero(toId);
         if(fromBalance - value < 0){
@@ -83,6 +101,7 @@ public class DatabaseEngine {
         logLength++;
         balances.put(fromId, fromBalance - value);
         balances.put(toId, toBalance + value);
+        locks.get(fromId).unlock();
         output_log(4, fromId, toId, value);
         check_output();
         return true;
