@@ -24,6 +24,8 @@ public class DatabaseEngine {
     private String dataDir;
     private int blockId = 1;
     private JsonArray blockTransRecord = new JsonArray();
+    private File logFile = new File(dataDir + "log.json");
+    //private FileWriter logWriter;
 
     DatabaseEngine(String dataDir) {
         this.dataDir = dataDir;
@@ -38,45 +40,51 @@ public class DatabaseEngine {
     }
 
     public int get(String userId) {
+        //logLength++;
         check_output();
-        logLength++;
         return getOrZero(userId);
     }
 
     public boolean put(String userId, int value) {
-        output_log(1, userId, "", value);
-        check_output();
         logLength++;
         balances.put(userId, value);
+        output_log(1, userId, "", value);
+        check_output();
         return true;
     }
 
     public boolean deposit(String userId, int value) {
-        output_log(2, userId, "", value);
-        check_output();
         logLength++;
         int balance = getOrZero(userId);
         balances.put(userId, balance + value);
+        output_log(2, userId, "", value);
+        check_output();
         return true;
     }
 
     public boolean withdraw(String userId, int value) {
-        output_log(3, userId, "", value);
-        check_output();
         logLength++;
         int balance = getOrZero(userId);
+        if(balance - value < 0){
+            return false;
+        }
         balances.put(userId, balance - value);
+        output_log(3, userId, "", value);
+        check_output();
         return true;
     }
 
     public boolean transfer(String fromId, String toId, int value) {
-        output_log(4, fromId, toId, value);
-        check_output();
         logLength++;
         int fromBalance = getOrZero(fromId);
         int toBalance = getOrZero(toId);
+        if(fromBalance - value < 0){
+            return false;
+        }
         balances.put(fromId, fromBalance - value);
         balances.put(toId, toBalance + value);
+        output_log(4, fromId, toId, value);
+        check_output();
         return true;
     }
 
@@ -86,10 +94,10 @@ public class DatabaseEngine {
 
     public void output_log(int type, String fromId, String toId, int value){
         //create log if not exist
-        File createLogFile = new File(dataDir + "log.json");
-        if(!createLogFile.exists()){
+        //File createLogFile = new File(dataDir + "log.json");
+        if(!logFile.exists()){
             try{
-                if(createLogFile.createNewFile()){
+                if(logFile.createNewFile()){
                     System.out.println("Log file created.");
                 } 
             } catch(IOException e){
@@ -104,15 +112,21 @@ public class DatabaseEngine {
         switch(type){
             case 0:
                 typeStr = "GET";
+                break;
             case 1:
                 typeStr = "PUT";
+                break;
             case 2:
                 typeStr = "DEPOSIT";
+                break;
             case 3:
                 typeStr = "WITHDRAW";
+                break;
             case 4:
                 typeStr = "TRANSFER";
+                break;
         }
+        
 
         if(type != 0){
             trans.addProperty("Type", typeStr);
@@ -123,16 +137,17 @@ public class DatabaseEngine {
                 trans.addProperty("ToID", toId);
             }
             trans.addProperty("Value", value);
+            
+            blockTransRecord.add(trans);
 
-            try(FileWriter file = new FileWriter(dataDir + "log.json")){
-                file.write(trans.toString());
-                file.flush();
-                file.close();
+            try(FileWriter logWriter = new FileWriter(dataDir + "log.json")){
+                logWriter.write(blockTransRecord.toString());
+                logWriter.flush();
+                logWriter.close();
+                System.out.println("PRINT LOG");
             } catch(IOException e){
                 e.printStackTrace();
             }
-
-            blockTransRecord.add(trans);
         }
     }
 
@@ -155,12 +170,9 @@ public class DatabaseEngine {
         block.add("Transactions", blockTransRecord);
         block.addProperty("Nonce", "00000000");
 
-        //update blockid, clear trans record
-        blockId ++;
-        blockTransRecord = new JsonArray();
-
         //create blockfile 
         File createBlockFile = new File(dataDir + Integer.toString(blockId) + ".json");
+        createBlockFile.delete();
         if(!createBlockFile.exists()){
             try{
                 if(createBlockFile.createNewFile()){
@@ -183,11 +195,15 @@ public class DatabaseEngine {
         }
 
         // delete log.json
-        File logFile = new File(dataDir + "log.json");
+        //File logFile = new File(dataDir + "log.json");
         if(logFile.delete()){
             System.out.println("Log file deleted!");
         } else {
             System.out.println("Fail to delete logfile.");
         }
+
+        //update blockid, clear trans record
+        blockId ++;
+        blockTransRecord = new JsonArray();
     }
 }

@@ -76,6 +76,11 @@ go run ./example/test_client.go -T=LogLength
 echo "Check value again: expecting value=5"
 go run ./example/test_client.go -T=GET -user=TEST---2
 
+echo "Log writing test"
+for I in `seq 0 9`; do
+	go run ./example/test_client.go -T=PUT -user=TEST---$I -value=10
+done
+
 
 echo "Test completed. Please verify JSON block output with example_1.json ."
 
