@@ -2,11 +2,14 @@ package iiis.systems.os.blockdb;
 
 import java.io.FileWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 
 public class DatabaseEngine {
     private static DatabaseEngine instance = null;
@@ -205,5 +208,53 @@ public class DatabaseEngine {
         //update blockid, clear trans record
         blockId ++;
         blockTransRecord = new JsonArray();
+    }
+    
+    public void recover_from_block() {
+    	int Id = 1;
+    	
+    	while (true) {
+    		try(FileReader file = new FileReader(dataDir + Integer.toString(blockId) + ".json")){
+    			JsonParser parser = new JsonParser();
+    			JsonObject object = (JsonObject) parser.parse(file);
+    			int type = object.get("Type").getAsInt();
+    			int value = object.get("Value").getAsInt();
+    		    String fromId = null, toId = null;
+    		    String userId = null;
+    		    
+    		    if(type == 4) {
+    		    	fromId = object.get("FromID").getAsString();
+    		    	toId = object.get("ToID").getAsString();
+    		    }
+    		    else {
+    		    	userId = object.get("UserId").getAsString();
+    		    }
+    		    
+    		    int balance = getOrZero(userId);
+    		    
+    		    switch(type) {
+    		        case 1:
+    		        	balances.put(userId, value);
+    		        	break;
+    		        case 2: 
+    		            balances.put(userId, balance + value);
+    		            break;
+    		        case 3:
+    		        	balances.put(userId, balance - value);
+    		        	break;
+    		        case 4: {
+    		        	int fromBalance = getOrZero(fromId);
+    		            int toBalance = getOrZero(toId);
+    		        	balances.put(fromId, fromBalance - value);
+    		            balances.put(toId, toBalance + value);
+    		            break;
+    		        }
+    		    }
+    			
+    		} catch(IOException e){
+    			break;
+    		}
+    		Id++;
+    	}
     }
 }
