@@ -63,11 +63,11 @@ public class DatabaseEngine {
     }
 
     public boolean withdraw(String userId, int value) {
-        logLength++;
         int balance = getOrZero(userId);
         if(balance - value < 0){
             return false;
         }
+        logLength++;
         balances.put(userId, balance - value);
         output_log(3, userId, "", value);
         check_output();
@@ -75,12 +75,12 @@ public class DatabaseEngine {
     }
 
     public boolean transfer(String fromId, String toId, int value) {
-        logLength++;
         int fromBalance = getOrZero(fromId);
         int toBalance = getOrZero(toId);
         if(fromBalance - value < 0){
             return false;
         }
+        logLength++;
         balances.put(fromId, fromBalance - value);
         balances.put(toId, toBalance + value);
         output_log(4, fromId, toId, value);
