@@ -2,13 +2,19 @@ package iiis.systems.os.blockdb;
 
 import java.io.FileWriter;
 import java.io.File;
+//import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map.Entry;
 import java.util.HashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 
 public class DatabaseEngine {
     private static DatabaseEngine instance = null;
@@ -19,6 +25,8 @@ public class DatabaseEngine {
 
     public static void setup(String dataDir) {
         instance = new DatabaseEngine(dataDir);
+        instance.recover();
+        instance.print_balance();
     }
 
     private HashMap<String, Integer> balances = new HashMap<>();
@@ -224,5 +232,101 @@ public class DatabaseEngine {
         //update blockid, clear trans record
         blockId ++;
         blockTransRecord = new JsonArray();
+    }
+
+    public void recover() {
+    	for (int i = 1; ; i++) {
+    		if(!recover_from_block(dataDir + Integer.toString(i) + ".json", false))
+    			break;
+    	}
+    	recover_from_block(dataDir + "log.json", true);
+    }
+    
+    public boolean recover_from_block(String path, boolean log) {
+    	try(FileReader file = new FileReader(path)){
+    		JsonParser parser = new JsonParser();
+    		JsonArray blockTranRecord;
+    		if (!log) {
+    		   JsonObject obj = (JsonObject) parser.parse(file);
+    		   blockTranRecord = obj.get("Transactions").getAsJsonArray();
+    		}
+    		else {
+    		   blockTranRecord = (JsonArray) parser.parse(file);
+    		}
+    			
+    		if (blockTranRecord.size() > 0) {
+    			for (int i = 0; i < blockTranRecord.size(); i++) {
+    				JsonObject object = (JsonObject) blockTranRecord.get(i);
+    				String type = object.get("Type").getAsString();
+    				int value = object.get("Value").getAsInt();  
+    				String fromId = null, toId = null;	
+    				String userId = null;
+    				if(type.equals("TRANSFER")) {
+    					fromId = object.get("FromID").getAsString();
+    					toId = object.get("ToID").getAsString();
+    				}
+    				else {
+    					userId = object.get("UserID").getAsString();
+    				}
+    				
+    					    
+    				int balance = getOrZero(userId);
+    		    
+    				switch(type) {
+    				case "PUT":
+    					balances.put(userId, value);
+    					break;
+    				case "DEPOSIT": 
+    					balances.put(userId, balance + value);
+    					break;
+    				case "WITHDRAW":
+    					balances.put(userId, balance - value);
+    					break;
+    				case "TRANSFER": {
+    					int fromBalance = getOrZero(fromId);
+    					int toBalance = getOrZero(toId);
+    					balances.put(fromId, fromBalance - value);
+    					balances.put(toId, toBalance + value);
+    					break;
+    				}
+    			    }
+    		    }
+    	    }
+    		return true;
+    	} catch(IOException e){
+    		return false;
+    	}
+    }
+    
+    public void print_balance() {
+    	File createBlockFile = new File(dataDir + "balance.json");
+        createBlockFile.delete();
+        if(!createBlockFile.exists()){
+            try{
+                if(createBlockFile.createNewFile()){
+                    System.out.println("New block created");
+                }
+            } catch (IOException e){
+                e.printStackTrace();
+                System.out.println("Creating block failed");
+            }
+        }
+        
+        List<String> list = new ArrayList<>();
+        for (Entry<String, Integer> entry: balances.entrySet()) {
+        	StringBuilder s = new StringBuilder();
+        	s.append(entry.getKey()).append(" ").append(entry.getValue());
+        	list.add(s.toString());
+        }
+        
+        try(FileWriter file = new FileWriter(dataDir + "balance.json")){
+            file.write(list.toString());
+            file.flush();
+
+            System.out.println("Writing information to block");
+        } catch(IOException e){
+            //e.printStackTrace();
+            System.out.println("Fail to write block");
+        }
     }
 }
