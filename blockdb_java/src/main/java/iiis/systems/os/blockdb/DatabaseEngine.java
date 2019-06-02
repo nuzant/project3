@@ -74,10 +74,11 @@ public class DatabaseEngine {
     }
 
     public boolean deposit(String userId, int value) {
-        //createLock(userId);
+        createLock(userId);
         logLength++;
         int balance = getOrZero(userId);
         balances.put(userId, balance + value);
+        locks.get(userId).unlock();
         output_log(2, userId, "", value);
         check_output();
         return true;
@@ -88,6 +89,7 @@ public class DatabaseEngine {
         locks.get(userId).lock();
         int balance = getOrZero(userId);
         if(balance - value < 0){
+            locks.get(userId).unlock();
             return false;
         }
         logLength++;
@@ -104,6 +106,7 @@ public class DatabaseEngine {
         int fromBalance = getOrZero(fromId);
         int toBalance = getOrZero(toId);
         if(fromBalance - value < 0){
+            locks.get(fromId).unlock();
             return false;
         }
         logLength++;
@@ -236,8 +239,10 @@ public class DatabaseEngine {
 
     public void recover() {
     	for (int i = 1; ; i++) {
-    		if(!recover_from_block(dataDir + Integer.toString(i) + ".json", false))
-    			break;
+            if(!recover_from_block(dataDir + Integer.toString(i) + ".json", false)){
+                blockId = i;
+                break;
+            }
     	}
     	recover_from_block(dataDir + "log.json", true);
     }
@@ -251,7 +256,8 @@ public class DatabaseEngine {
     		   blockTranRecord = obj.get("Transactions").getAsJsonArray();
     		}
     		else {
-    		   blockTranRecord = (JsonArray) parser.parse(file);
+               blockTranRecord = (JsonArray) parser.parse(file);
+               logLength = blockTranRecord.size();
     		}
     			
     		if (blockTranRecord.size() > 0) {
